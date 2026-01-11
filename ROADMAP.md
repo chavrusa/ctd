@@ -20,19 +20,11 @@ A public archive of regulatory documents for drug trials (ALLN-177/Reloxaliase, 
   └── README.md
   ```
 - [ ] Add README with setup instructions
-- [ ] Define metadata format (data contract for all phases):
-  ```
-  documents/ALLN-346/Clinical-Studies/metadata.json
-  {
-    "CSR.pdf": {
-      "title": "Clinical Study Report",
-      "summary": "Phase 1 single ascending dose safety study...",
-      "tags": ["csr", "phase-1"]
-    }
-  }
-  ```
+- [x] Define metadata format (data contract for all phases): see [METADATA.md](METADATA.md)
   - One `metadata.json` per directory
-  - Scripts and UI both read from this format
+  - `_folder` key for folder-level metadata (title, summary, drug)
+  - Filename keys for file-level metadata (title, summary, tags)
+  - `drug` field inherits down the tree
 
 ---
 
