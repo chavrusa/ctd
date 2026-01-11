@@ -5,6 +5,7 @@
 	import * as XLSX from 'xlsx';
 	import mammoth from 'mammoth';
 	import TocView from './TocView.svelte';
+	import RtfViewer from './RtfViewer.svelte';
 
 	interface Props {
 		entry: TocEntry | null;
@@ -14,14 +15,15 @@
 
 	let { entry, scrollPosition = null, onScrollChange }: Props = $props();
 
-	type ViewerType = 'pdf' | 'image' | 'audio' | 'video' | 'text' | 'spreadsheet' | 'docx' | 'download';
+	type ViewerType = 'pdf' | 'image' | 'audio' | 'video' | 'text' | 'rtf' | 'spreadsheet' | 'docx' | 'download';
 
 	function getViewerType(type: string): ViewerType {
 		if (type === 'pdf') return 'pdf';
 		if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(type)) return 'image';
 		if (['mp3', 'wav', 'ogg'].includes(type)) return 'audio';
 		if (['mp4', 'webm', 'mov'].includes(type)) return 'video';
-		if (['txt', 'md', 'csv', 'rtf'].includes(type)) return 'text';
+		if (['txt', 'md', 'csv'].includes(type)) return 'text';
+		if (type === 'rtf') return 'rtf';
 		if (['xls', 'xlsx'].includes(type)) return 'spreadsheet';
 		if (type === 'docx') return 'docx';
 		return 'download';
@@ -200,6 +202,8 @@
 				>
 					<pre class="text-sm font-mono whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200">{textContent}</pre>
 				</div>
+			{:else if viewerType === 'rtf' && entry}
+				<RtfViewer src={fileUrl() || ''} onScrollChange={onScrollChange} />
 			{:else if viewerType === 'spreadsheet' && spreadsheetData !== null}
 				<div
 					class="h-full overflow-auto"
