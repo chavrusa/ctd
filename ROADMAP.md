@@ -76,10 +76,10 @@ A public archive of regulatory documents for drug trials (ALLN-177/Reloxaliase, 
 
 *Reads from metadata.json files defined in Phase 1*
 
-- [ ] Update `generate_toc.py` to include descriptions from metadata
-- [ ] Generate `toc.json` with full URLs and descriptions
-- [ ] Generate `toc.md` (markdown) for LLM consumption
-- [ ] Structure:
+- [x] Update `generate_toc.py` to include descriptions from metadata
+- [x] Generate `toc.json` with full URLs and descriptions
+- [x] Generate `toc.md` (markdown) for LLM consumption
+- [x] Structure:
   ```json
   {
     "url": "https://example.com/documents/ALLN-346/Clinical-Studies/101-SAD/CSR.pdf",

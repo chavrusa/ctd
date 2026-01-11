@@ -28,6 +28,96 @@
 
 	let viewerType = $derived(entry ? getViewerType(entry.type) : null);
 
+	// TOC content for landing page
+	let tocContent: string | null = $state(null);
+	let tocLoading = $state(false);
+
+	onMount(async () => {
+		// Load TOC markdown for landing view
+		tocLoading = true;
+		try {
+			const res = await fetch('/toc.md');
+			if (res.ok) {
+				tocContent = await res.text();
+			}
+		} catch (e) {
+			console.error('Failed to load TOC:', e);
+		} finally {
+			tocLoading = false;
+		}
+	});
+
+	// Simple markdown-to-HTML for TOC display
+	function renderTocMarkdown(md: string): string {
+		const lines = md.split('\n');
+		let html = '';
+		let inList = false;
+		let listDepth = 0;
+
+		for (const line of lines) {
+			// Headers
+			if (line.startsWith('# ')) {
+				if (inList) { html += '</ul>'.repeat(listDepth + 1); inList = false; listDepth = 0; }
+				html += `<h1 class="text-2xl font-bold mt-6 mb-2">${escapeHtml(line.slice(2))}</h1>`;
+				continue;
+			}
+			if (line.startsWith('## ')) {
+				if (inList) { html += '</ul>'.repeat(listDepth + 1); inList = false; listDepth = 0; }
+				html += `<h2 class="text-xl font-semibold mt-4 mb-2">${escapeHtml(line.slice(3))}</h2>`;
+				continue;
+			}
+
+			// List items
+			const listMatch = line.match(/^(\s*)- (.+)$/);
+			if (listMatch) {
+				const indent = Math.floor(listMatch[1].length / 2);
+				const content = listMatch[2];
+
+				if (!inList) {
+					html += '<ul class="list-none space-y-1">';
+					inList = true;
+					listDepth = indent;
+				} else if (indent > listDepth) {
+					html += '<ul class="list-none ml-4 space-y-1">';
+					listDepth = indent;
+				} else if (indent < listDepth) {
+					html += '</ul>'.repeat(listDepth - indent);
+					listDepth = indent;
+				}
+
+				// Parse content: bold folders, links
+				let parsed = escapeHtml(content);
+				// Bold: **text**
+				parsed = parsed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+				// Links: [text](url)
+				parsed = parsed.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 dark:text-blue-400 hover:underline">$1</a>');
+
+				html += `<li class="py-0.5">${parsed}</li>`;
+				continue;
+			}
+
+			// Plain text paragraphs
+			if (line.trim()) {
+				if (inList) { html += '</ul>'.repeat(listDepth + 1); inList = false; listDepth = 0; }
+				html += `<p class="my-2">${escapeHtml(line)}</p>`;
+			}
+		}
+
+		if (inList) {
+			html += '</ul>'.repeat(listDepth + 1);
+		}
+
+		return html;
+	}
+
+	function escapeHtml(text: string): string {
+		return text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+	}
+
 	let fileUrl = $derived(() => {
 		if (!entry) return null;
 		// Encode path segments but preserve slashes
@@ -238,14 +328,26 @@
 		</div>
 	</div>
 {:else}
-	<!-- Empty state / landing -->
-	<div class="h-full flex flex-col items-center justify-center p-8 text-center">
-		<FileText class="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
-		<h2 class="text-xl font-medium text-gray-900 dark:text-gray-100 mb-2">
-			CTD Document Archive
-		</h2>
-		<p class="text-gray-600 dark:text-gray-400 max-w-md">
-			Select a document from the sidebar to view it. This archive contains regulatory documents for ALLN-177 and ALLN-346 drug trials.
-		</p>
+	<!-- Landing view with TOC -->
+	<div class="h-full overflow-auto p-6">
+		{#if tocLoading}
+			<div class="flex items-center justify-center py-12">
+				<Loader2 class="h-8 w-8 animate-spin text-gray-400" />
+			</div>
+		{:else if tocContent}
+			<div class="max-w-4xl mx-auto text-gray-900 dark:text-gray-100">
+				{@html renderTocMarkdown(tocContent)}
+			</div>
+		{:else}
+			<div class="flex flex-col items-center justify-center py-12 text-center">
+				<FileText class="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+				<h2 class="text-xl font-medium text-gray-900 dark:text-gray-100 mb-2">
+					CTD Document Archive
+				</h2>
+				<p class="text-gray-600 dark:text-gray-400 max-w-md">
+					Select a document from the sidebar to view it.
+				</p>
+			</div>
+		{/if}
 	</div>
 {/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Menu, X, Sun, Moon } from 'lucide-svelte';
+	import { Menu, X, Sun, Moon, Home } from 'lucide-svelte';
 	import TocTree from '$lib/components/TocTree.svelte';
 	import DocumentViewer from '$lib/components/DocumentViewer.svelte';
 	import type { TocEntry } from '$lib/types';
@@ -121,6 +121,12 @@
 			document.documentElement.classList.remove('dark');
 		}
 	}
+
+	function goHome() {
+		selectedEntry = null;
+		scrollPosition = null;
+		window.history.replaceState(null, '', window.location.pathname);
+	}
 </script>
 
 <svelte:head>
@@ -141,9 +147,21 @@
 			{/if}
 		</button>
 
-		<h1 class="font-semibold">CTD Document Archive</h1>
+		<button onclick={goHome} class="font-semibold hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+			CTD Document Archive
+		</button>
 
 		<div class="flex-1"></div>
+
+		{#if selectedEntry}
+			<button
+				class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+				onclick={goHome}
+				title="Back to Table of Contents"
+			>
+				<Home class="h-5 w-5" />
+			</button>
+		{/if}
 
 		<button
 			class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"

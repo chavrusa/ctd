@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate toc.json from the documents folder structure."""
+"""Generate toc.json and toc.md from the documents folder structure."""
 
 import json
 import os
@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 
 DOCS_DIR = Path(__file__).parent / "documents"
-OUTPUT_FILE = Path(__file__).parent / "toc.json"
+OUTPUT_JSON = Path(__file__).parent / "toc.json"
+OUTPUT_MD = Path(__file__).parent / "toc.md"
+BASE_URL = "https://archive.icosian.net"
 
 # Custom sort orders for drug development workflow
 # Lower number = appears first
@@ -77,20 +79,54 @@ def get_sort_key(name, parent_path):
     # Default: alphabetical but after numbered items
     return (1000, name.lower())
 
-def scan_directory(path):
+def load_metadata(path):
+    """Load metadata.json from a directory if it exists."""
+    metadata_file = os.path.join(path, "metadata.json")
+    if os.path.exists(metadata_file):
+        try:
+            with open(metadata_file, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+def merge_inherited(parent_inherited, folder_meta):
+    """Merge inherited properties from parent with current folder's _folder metadata."""
+    inherited = parent_inherited.copy()
+    if folder_meta:
+        # drug is the main inherited property
+        if "drug" in folder_meta:
+            inherited["drug"] = folder_meta["drug"]
+        if "drugName" in folder_meta:
+            inherited["drugName"] = folder_meta["drugName"]
+    return inherited
+
+def scan_directory(path, inherited=None):
     """Recursively scan directory and build tree structure."""
+    if inherited is None:
+        inherited = {}
+
     items = []
+
+    # Load metadata for this directory
+    metadata = load_metadata(path)
+    folder_meta = metadata.get("_folder", {})
+
+    # Update inherited properties
+    current_inherited = merge_inherited(inherited, folder_meta)
 
     try:
         entries = os.listdir(path)
     except PermissionError:
         return items
 
-    # Separate folders and files
+    # Separate folders and files, skip metadata.json
     folders = []
     files = []
 
     for entry in entries:
+        if entry == "metadata.json":
+            continue
         full_path = os.path.join(path, entry)
         if os.path.isdir(full_path):
             folders.append(entry)
@@ -105,24 +141,124 @@ def scan_directory(path):
     for entry in folders:
         full_path = os.path.join(path, entry)
         rel_path = os.path.relpath(full_path, DOCS_DIR.parent)
-        children = scan_directory(full_path)
-        items.append({
+
+        # Load child folder's metadata for its title/summary
+        child_metadata = load_metadata(full_path)
+        child_folder_meta = child_metadata.get("_folder", {})
+
+        children = scan_directory(full_path, current_inherited)
+
+        item = {
             "name": entry,
             "type": "folder",
             "path": rel_path,
             "children": children
-        })
+        }
+
+        # Add metadata if present
+        if child_folder_meta.get("title"):
+            item["title"] = child_folder_meta["title"]
+        if child_folder_meta.get("summary"):
+            item["summary"] = child_folder_meta["summary"]
+
+        items.append(item)
 
     for entry in files:
         full_path = os.path.join(path, entry)
         rel_path = os.path.relpath(full_path, DOCS_DIR.parent)
-        items.append({
+
+        # Get file-specific metadata
+        file_meta = metadata.get(entry, {})
+
+        item = {
             "name": entry,
             "type": get_file_type(entry),
             "path": rel_path
-        })
+        }
+
+        # Add metadata if present
+        if file_meta.get("title"):
+            item["title"] = file_meta["title"]
+        if file_meta.get("summary"):
+            item["summary"] = file_meta["summary"]
+        if file_meta.get("tags"):
+            item["tags"] = file_meta["tags"]
+
+        # Add inherited properties
+        if current_inherited.get("drug"):
+            item["drug"] = current_inherited["drug"]
+
+        items.append(item)
 
     return items
+
+def generate_markdown(node, depth=0):
+    """Generate markdown representation of the TOC tree."""
+    lines = []
+    indent = "  " * depth
+
+    if node.get("type") == "folder":
+        title = node.get("title", node["name"])
+        summary = node.get("summary", "")
+
+        if depth == 0:
+            lines.append(f"# {title}\n")
+        else:
+            lines.append(f"{indent}- **{title}/**")
+
+        if summary:
+            lines.append(f"{indent}  {summary}")
+
+        for child in node.get("children", []):
+            lines.extend(generate_markdown(child, depth + 1))
+    else:
+        title = node.get("title", node["name"])
+        summary = node.get("summary", "")
+        drug = node.get("drug", "")
+        file_type = node.get("type", "")
+
+        # Build URL with hash for deep linking
+        url_path = node["path"].replace(" ", "%20")
+        url = f"{BASE_URL}/#{url_path}"
+
+        # Format: - [Title](url) (type) - summary
+        line = f"{indent}- [{title}]({url})"
+        if file_type:
+            line += f" ({file_type})"
+        if drug:
+            line += f" [{drug}]"
+        lines.append(line)
+
+        if summary:
+            lines.append(f"{indent}  {summary}")
+
+    return lines
+
+def flatten_files(node, files=None):
+    """Flatten the tree into a list of files for agent consumption."""
+    if files is None:
+        files = []
+
+    if node.get("type") != "folder":
+        url_path = node["path"].replace(" ", "%20")
+        file_entry = {
+            "url": f"{BASE_URL}/#{url_path}",
+            "title": node.get("title", node["name"]),
+            "type": node.get("type", "unknown"),
+            "path": node["path"]
+        }
+        if node.get("summary"):
+            file_entry["description"] = node["summary"]
+        if node.get("drug"):
+            file_entry["drug"] = node["drug"]
+        if node.get("tags"):
+            file_entry["tags"] = node["tags"]
+        files.append(file_entry)
+    else:
+        for child in node.get("children", []):
+            flatten_files(child, files)
+
+    return files
 
 def main():
     if not DOCS_DIR.exists():
@@ -136,8 +272,24 @@ def main():
         "children": scan_directory(DOCS_DIR)
     }
 
-    with open(OUTPUT_FILE, "w") as f:
+    # Write JSON (tree structure for UI)
+    with open(OUTPUT_JSON, "w") as f:
         json.dump(toc, f, indent=2)
+
+    # Write Markdown (for LLM consumption)
+    md_lines = [
+        "# CTD Document Archive",
+        "",
+        "This archive contains regulatory documents for ALLN-177 (Reloxaliase) and ALLN-346 drug trials.",
+        "",
+        "## Documents",
+        ""
+    ]
+    for child in toc.get("children", []):
+        md_lines.extend(generate_markdown(child, 0))
+
+    with open(OUTPUT_MD, "w") as f:
+        f.write("\n".join(md_lines))
 
     # Count files
     def count_files(node):
@@ -146,7 +298,8 @@ def main():
         return sum(count_files(child) for child in node.get("children", []))
 
     total = count_files(toc)
-    print(f"Generated {OUTPUT_FILE} with {total} files")
+    print(f"Generated {OUTPUT_JSON} with {total} files")
+    print(f"Generated {OUTPUT_MD}")
 
 if __name__ == "__main__":
     main()
