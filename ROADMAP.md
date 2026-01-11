@@ -60,17 +60,14 @@ A public archive of regulatory documents for drug trials (ALLN-177/Reloxaliase, 
 ## Phase 4: Enhanced File Support
 **Goal: Render more file types inline**
 
-| Format | Viewer |
-|--------|--------|
-| PDF | iframe / PDF.js |
-| PNG/JPG/GIF | `<img>` tag |
-| MP3/WAV | `<audio>` player |
-| MP4/WebM | `<video>` player |
-| XLS/XLSX | Parse with SheetJS, render as table |
-| CSV | Parse and render as table |
-| TXT/RTF | Text viewer |
-| DOCX | Render with mammoth.js or download |
-| Others | Download link |
+- [x] PDF → iframe
+- [x] PNG/JPG/GIF → `<img>` tag
+- [x] MP3/WAV → `<audio>` player
+- [x] MP4/WebM → `<video>` player
+- [x] XLS/XLSX → SheetJS table viewer
+- [x] CSV/TXT → text viewer
+- [x] DOCX → mammoth.js HTML rendering
+- [x] Others → download link
 
 ---
 
