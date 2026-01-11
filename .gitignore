@@ -22,3 +22,4 @@ Thumbs.db
 
 # Generated (can be regenerated from documents/)
 toc.json
+__pycache__/
