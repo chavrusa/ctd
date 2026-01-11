@@ -1,0 +1,20 @@
+# Document data (large files, not for git)
+/documents/
+
+# Data files
+*.sas7bdat
+*.zip
+
+# Node
+node_modules/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated (can be regenerated from documents/)
+toc.json
