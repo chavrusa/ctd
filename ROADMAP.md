@@ -42,19 +42,18 @@ A public archive of regulatory documents for drug trials (ALLN-177/Reloxaliase, 
 ## Phase 3: Svelte + Vite + shadcn Rebuild
 **Goal: Modern, pretty frontend with shareable URLs**
 
-- [ ] Initialize Vite + Svelte project
-- [ ] Add shadcn-svelte components
-- [ ] Implement layout from sketch:
-  - Header with welcome message + contribute CTA
+- [x] Initialize Vite + Svelte project
+- [x] Add shadcn-svelte components
+- [x] Implement layout:
+  - Header with title + dark mode toggle
   - Left sidebar with TOC tree
   - Main viewer area
   - Mobile: hamburger → file selector
-- [ ] Style with Tailwind (comes with shadcn)
-- [ ] Dark mode support
-- [ ] URL state & deep linking (bake in from the start):
-  - URL structure: `/#/drug/study/file?page=5`
+- [x] Style with Tailwind
+- [x] Dark mode support
+- [x] URL state & deep linking:
+  - URL hash for document path
   - Browser back/forward navigation
-  - Copy link button
 
 ---
 

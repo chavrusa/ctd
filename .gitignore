@@ -8,6 +8,10 @@
 # Node
 node_modules/
 
+# SvelteKit build artifacts
+web/build/
+web/.svelte-kit/
+
 # Environment
 .env
 .env.local
