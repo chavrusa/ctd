@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TocEntry } from '$lib/types';
-	import { ChevronRight, Folder, File, FileText } from 'lucide-svelte';
+	import { ChevronRight, File, FileText } from 'lucide-svelte';
 	import { cn } from '$lib/utils';
 	import TocTree from './TocTree.svelte';
 
@@ -27,7 +27,6 @@
 	}
 
 	function getIcon(type: string) {
-		if (type === 'folder') return Folder;
 		if (type === 'pdf') return FileText;
 		return File;
 	}
@@ -47,6 +46,7 @@
 				isSelected && 'bg-gray-100 dark:bg-gray-800 font-medium'
 			)}
 			style="padding-left: {8 + depth * 16}px; padding-right: 8px;"
+			title={entry.name}
 			onclick={() => {
 				if (isFolder) {
 					toggleFolder(entry.path);
@@ -60,9 +60,8 @@
 					class={cn('h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-90')}
 				/>
 			{:else}
-				<span class="w-4 shrink-0"></span>
+				<Icon class="h-4 w-4 shrink-0 text-gray-500" />
 			{/if}
-			<Icon class="h-4 w-4 shrink-0 text-gray-500" />
 			<span class="truncate">{entry.title || entry.name}</span>
 		</button>
 

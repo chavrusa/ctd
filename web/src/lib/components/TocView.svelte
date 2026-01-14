@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ChevronRight, Search, Folder, FileText, X } from 'lucide-svelte';
+	import { ChevronRight, Search, FileText, X } from 'lucide-svelte';
 	import Glossary from './Glossary.svelte';
 	import type { TocEntry } from '$lib/types';
 
@@ -229,12 +229,12 @@
 			<div class="py-1">
 				<button
 					onclick={() => toggleFolder(node.path)}
+					title={node.name}
 					class="flex items-start gap-2 w-full text-left group hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-2 py-1 -ml-2 transition-colors"
 				>
 					<ChevronRight
 						class="h-4 w-4 mt-0.5 shrink-0 text-gray-400 transition-transform duration-200 {expanded ? 'rotate-90' : ''}"
 					/>
-					<Folder class="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
 					<div class="flex-1 min-w-0">
 						<span
 							class="font-medium text-gray-900 dark:text-gray-100 {matched ? 'bg-yellow-200 dark:bg-yellow-800' : ''}"
@@ -266,6 +266,7 @@
 			<div class="py-1">
 				<a
 					href="#{node.path}"
+					title={node.name}
 					class="flex items-start gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-2 py-1 -ml-2 transition-colors group"
 				>
 					<FileText class="h-4 w-4 mt-0.5 shrink-0 {getTypeColor(node.type)}" />

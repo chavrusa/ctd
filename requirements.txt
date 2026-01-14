@@ -1,0 +1,6 @@
+# CTD Document Archive - Python dependencies
+#
+# Note: rclone is required for Google Drive downloads but is installed
+# as a system package, not via pip. See scripts/download_all.py for setup.
+
+# No pip dependencies currently required - all scripts use standard library
