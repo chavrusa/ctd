@@ -22,7 +22,7 @@ OUTPUT_MD = PROJECT_DIR / "toc.md"
 BASE_URL = "https://archive.icosian.net"
 
 # Accession number pattern
-ACCESSION_PATTERN = re.compile(r'^RDCP-\d{2}-\d{4}$')
+ACCESSION_PATTERN = re.compile(r'^RDCP-[A-Z]?\d{2}-\d{4}$|^RDCP-E26-EMA$')
 
 # Custom sort orders for drug development workflow
 # Lower number = appears first
@@ -229,7 +229,8 @@ def scan_directory(path, inherited=None, is_accession_root=False):
     is_top_level = (str(path) == str(DOCS_DIR))
 
     for entry in entries:
-        if entry in ("metadata.json", "__metadata.json", ".gitignore", ".gitkeep"):
+        if entry in ("metadata.json", "__metadata.json", ".gitignore", ".gitkeep",
+                     "index.json", "index.md", "index-full.json", "index-full.md"):
             continue
         if is_top_level and not ACCESSION_PATTERN.match(entry):
             continue
