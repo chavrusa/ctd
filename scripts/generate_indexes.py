@@ -544,6 +544,24 @@ def generate_static_documents_index():
 
     (static_root / "index.md").write_text("\n".join(top_lines))
 
+    # Also generate top-level web/static/index.json
+    top_json = {
+        "name": "CTD Document Archive",
+        "description": "A collection of regulatory documents spanning drug development and approval processes: Common Technical Document submissions, FDA correspondence and review materials, clinical trial protocols and study reports, European Medicines Agency Public Assessment Reports, nonclinical and manufacturing data, and related regulatory filings.",
+        "url": BASE_URL,
+        "accessions": [
+            {
+                "id": folder["name"],
+                "name": folder["display_name"],
+                "items": folder["item_count"],
+                "index_md": f"{BASE_URL}/documents/{urllib.parse.quote(folder['name'], safe='')}/index.md",
+                "index_json": f"{BASE_URL}/documents/{urllib.parse.quote(folder['name'], safe='')}/index.json",
+            }
+            for folder in folders
+        ],
+    }
+    (static_root / "index.json").write_text(json.dumps(top_json, indent=2))
+
 
 def main():
     import argparse

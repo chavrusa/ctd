@@ -1,3 +1,6 @@
 # allow crawling everything by default
 User-agent: *
 Disallow:
+
+# LLM-friendly markdown index
+# See /index.md for machine-readable site content

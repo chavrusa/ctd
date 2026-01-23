@@ -37,7 +37,13 @@ Development workstreams for public release and beyond.
 **Hierarchical index files:**
 - [x] `index.md` at each folder level (not one giant 4500-line file)
 - [x] Machine-readable `index.json` per folder
+- [x] Root-level `index.json` with accession listing
 - [ ] Root `manifest.json` with checksums for caching/validation
+
+**LLM web-tool accessibility:**
+- [x] Visually-hidden div in HTML with site description and index pointers (survives text extraction)
+- [x] MIME type `text/markdown` for `.md` files (nginx config)
+- [x] Full URLs in link text (relative paths get mangled by extractors)
 
 **MCP server:**
 - [ ] `list_accessions()` - returns all accessions with metadata
@@ -48,7 +54,7 @@ Development workstreams for public release and beyond.
 
 **Other agent features:**
 - [ ] OpenAPI spec for any REST endpoints
-- [ ] `llms.txt` or `ai.txt` at root (emerging convention)
+- [x] ~`llms.txt` or `ai.txt` at root~ (skipped; no standard exists, visually-hidden div approach works)
 - [ ] Structured sitemap with document metadata
 
 **Archival & redundancy:**
