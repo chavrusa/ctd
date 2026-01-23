@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TocEntry } from '$lib/types';
-	import { ChevronRight, File, FileText, Loader2 } from 'lucide-svelte';
+	import { ChevronRight, ExternalLink, File, FileText, Loader2 } from 'lucide-svelte';
 	import { cn } from '$lib/utils';
 	import TocTree from './TocTree.svelte';
 
@@ -60,6 +60,15 @@
 		if (type === 'pdf') return FileText;
 		return File;
 	}
+
+	function handleFileClick(entry: TocEntry) {
+		// If entry has external URL, open it in new tab
+		if (entry.url) {
+			window.open(entry.url, '_blank', 'noopener,noreferrer');
+		} else {
+			onSelect(entry);
+		}
+	}
 </script>
 
 <div class="flex flex-col">
@@ -77,12 +86,12 @@
 				isSelected && 'bg-gray-100 dark:bg-gray-800 font-medium'
 			)}
 			style="padding-left: {8 + depth * 16}px; padding-right: 8px;"
-			title={entry.name}
+			title={entry.title || entry.name}
 			onclick={() => {
 				if (isFolder) {
 					handleFolderClick(entry);
 				} else {
-					onSelect(entry);
+					handleFileClick(entry);
 				}
 			}}
 		>
@@ -94,6 +103,8 @@
 						class={cn('h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-90')}
 					/>
 				{/if}
+			{:else if entry.url}
+				<ExternalLink class="h-4 w-4 shrink-0 text-blue-500" />
 			{:else}
 				<Icon class="h-4 w-4 shrink-0 text-gray-500" />
 			{/if}

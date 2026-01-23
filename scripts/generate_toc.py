@@ -304,6 +304,31 @@ def scan_directory(path, inherited=None, is_accession_root=False):
 
             # Check if this is a split point (should have its own toc.json)
             if is_split_point(full_path):
+                # Check for pre-built toc.json (e.g., from build_ema.py)
+                existing_toc_path = Path(full_path) / "toc.json"
+                if existing_toc_path.exists():
+                    try:
+                        with open(existing_toc_path) as f:
+                            existing_toc = json.load(f)
+                        # If pre-built (has _source marker), use it as-is
+                        if existing_toc.get("_source"):
+                            split_stats["count"] += 1
+                            split_stats["paths"].append(rel_path)
+
+                            # Return a stub with $ref for lazy loading
+                            item = {
+                                "name": entry,
+                                "type": "folder",
+                                "path": rel_path,
+                                "$ref": f"{rel_path}/toc.json"
+                            }
+                            if existing_toc.get("title"):
+                                item["title"] = existing_toc["title"]
+                            items.append(item)
+                            continue
+                    except (json.JSONDecodeError, IOError):
+                        pass  # Fall through to normal scanning
+
                 # Recursively scan and write to separate toc.json
                 children = scan_directory(full_path, current_inherited, is_accession_root=False)
 
@@ -313,6 +338,9 @@ def scan_directory(path, inherited=None, is_accession_root=False):
                     "path": rel_path,
                     "children": children
                 }
+                # Add title for files/ folders
+                if entry == "files":
+                    child_toc["title"] = "All Files"
                 write_child_toc(full_path, child_toc)
                 split_stats["count"] += 1
                 split_stats["paths"].append(rel_path)
@@ -325,9 +353,11 @@ def scan_directory(path, inherited=None, is_accession_root=False):
                     "$ref": f"{rel_path}/toc.json"
                 }
 
-                # Add title from metadata if available
+                # Add title from metadata if available, or use default for files/
                 if child_folder_meta.get("title"):
                     item["title"] = child_folder_meta["title"]
+                elif entry == "files":
+                    item["title"] = "All Files"
 
             else:
                 # Normal folder - include children inline

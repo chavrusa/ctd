@@ -2,10 +2,11 @@
 """Build EMA (European Medicines Agency) accession structure.
 
 Creates the RDCP-E26-EMA accession with:
-- files/{product-number}/EMA/ - symlinks to actual files in _raw/
+- files/{product-number}/EMA/ - toc.json entries with URLs to EMA documents
 - By-ATC/ - hierarchical view by ATC classification codes
 
-Symlinks are intentionally broken until files are downloaded on-demand.
+Documents are not downloaded; instead, toc.json files contain URLs that
+the web app uses to link directly to EMA.
 
 Usage:
     python scripts/build_ema.py              # Build structure
@@ -181,11 +182,95 @@ def normalize_name(name: str) -> str:
     return name
 
 
+def make_doc_toc_entry(doc: Document, path_prefix: str) -> dict:
+    """Create a TOC entry for a document with external URL.
+
+    Args:
+        doc: The Document object
+        path_prefix: Path prefix like "documents/RDCP-E26-EMA/files/EMEA-H-C-000292/EMA"
+
+    Returns:
+        dict with name, type, path, url, and other metadata
+    """
+    filename = doc.get_filename()
+    return {
+        "name": filename,
+        "type": "pdf",
+        "path": f"{path_prefix}/{filename}",
+        "url": doc.url,
+        "date": doc.get_date(),
+        "title": doc.get_title(),
+        "drug": "Multiple (EMA database)",
+        "accession": EMA_ACCESSION,
+    }
+
+
+def make_folder_toc_entry(name: str, path: str, children: list, title: str = None) -> dict:
+    """Create a TOC folder entry.
+
+    Args:
+        name: Folder name
+        path: Full path like "documents/RDCP-E26-EMA/files"
+        children: List of child TOC entries
+        title: Display title (if different from name)
+
+    Returns:
+        dict with folder structure
+    """
+    entry = {
+        "name": name,
+        "type": "folder",
+        "path": path,
+        "children": children,
+    }
+    if title and title != name:
+        entry["title"] = title
+    return entry
+
+
+def sort_docs_with_par_first(doc_entries: list) -> list:
+    """Sort document entries with the first PAR starred and at the top.
+
+    Finds the first "Public Assessment Report" (case-insensitive), adds a star
+    emoji to its title, and moves it to the top. Other documents remain sorted
+    alphabetically by name (which starts with date).
+
+    Args:
+        doc_entries: List of document TOC entries
+
+    Returns:
+        Sorted list with starred PAR first
+    """
+    if not doc_entries:
+        return doc_entries
+
+    # Sort alphabetically by name first
+    sorted_docs = sorted(doc_entries, key=lambda x: x["name"])
+
+    # Find the first PAR (case-insensitive match)
+    par_idx = None
+    for i, doc in enumerate(sorted_docs):
+        title = doc.get("title", "").lower()
+        if "assessment report" in title and "public" in title:
+            par_idx = i
+            break
+
+    if par_idx is not None:
+        # Remove the PAR from its position
+        par_doc = sorted_docs.pop(par_idx)
+        # Add star to title
+        par_doc["title"] = "⭐ " + par_doc.get("title", "")
+        # Insert at the beginning
+        sorted_docs.insert(0, par_doc)
+
+    return sorted_docs
+
+
 def load_medicines() -> dict[str, Medicine]:
     """Load medicines from JSON and return dict keyed by product number."""
     if not MEDICINES_JSON.exists():
         print(f"ERROR: Medicines JSON not found: {MEDICINES_JSON}")
-        print("Run 'python scripts/download_ema.py --json-only' first.")
+        print("Run 'python scripts/download_ema.py' first.")
         return {}
 
     with open(MEDICINES_JSON) as f:
@@ -207,7 +292,7 @@ def load_documents() -> list[Document]:
     """Load EPAR documents from JSON."""
     if not EPAR_DOCS_JSON.exists():
         print(f"ERROR: EPAR documents JSON not found: {EPAR_DOCS_JSON}")
-        print("Run 'python scripts/download_ema.py --json-only' first.")
+        print("Run 'python scripts/download_ema.py' first.")
         return []
 
     with open(EPAR_DOCS_JSON) as f:
@@ -321,44 +406,189 @@ def escape_product_number(product_num: str) -> str:
     return escape_for_path(product_num)
 
 
-def create_files_symlinks(
+def split_product_number(escaped_product: str) -> tuple[str, str]:
+    """Split product number into group prefix and suffix.
+
+    EMEA-H-C-000292 -> ("EMEA-H-C-000", "292")
+
+    This creates grouping by first 3 digits of the product number,
+    resulting in ~7 prefix groups for the current EMA data.
+    """
+    # Pattern: EMEA-H-C-NNNNNN (6 digits after EMEA-H-C-)
+    # Group by first 3 digits (12 char prefix = "EMEA-H-C-" + "NNN")
+    if len(escaped_product) >= 13:  # "EMEA-H-C-" + at least 4 chars
+        prefix = escaped_product[:12]  # "EMEA-H-C-000"
+        suffix = escaped_product[12:]  # "292"
+        return prefix, suffix
+    return escaped_product, ""
+
+
+def build_files_toc_entry(
     product_num: str,
     docs: list[Document],
-    stats: ViewStatistics,
-    dry_run: bool = False
-) -> dict[str, Path]:
-    """Create symlinks in files/{product}/EMA/ pointing to _raw/.
+) -> tuple[str, str, dict]:
+    """Build TOC entry for a product in files/{prefix}/{suffix}/EMA/.
 
-    Returns dict mapping doc URL to symlink path (for By-ATC to reference).
+    Returns tuple of (prefix, suffix, toc_entry) where toc_entry is the
+    suffix folder containing EMA/ with document children.
     """
     escaped_product = escape_product_number(product_num)
-    product_dir = EMA_ACCESSION_DIR / "files" / escaped_product / "EMA"
+    prefix, suffix = split_product_number(escaped_product)
 
-    symlink_map = {}
+    # Path: files/{prefix}/{suffix}/EMA
+    path_prefix = f"documents/{EMA_ACCESSION}/files/{prefix}/{suffix}/EMA"
 
+    # Build document entries
+    doc_entries = []
     for doc in docs:
         if not doc.url:
             continue
+        doc_entries.append(make_doc_toc_entry(doc, path_prefix))
 
-        # Target in _raw/
-        target = url_to_raw_path(doc.url)
+    # Sort by date (name starts with date)
+    doc_entries = sort_docs_with_par_first(doc_entries)
 
-        # Symlink path
-        filename = doc.get_filename()
-        link = product_dir / filename
+    # Build nested structure: {suffix}/EMA/
+    ema_folder = make_folder_toc_entry(
+        "EMA",
+        path_prefix,
+        doc_entries
+    )
 
-        symlink_map[doc.url] = link
+    suffix_folder = make_folder_toc_entry(
+        suffix,
+        f"documents/{EMA_ACCESSION}/files/{prefix}/{suffix}",
+        [ema_folder]
+    )
 
-        if dry_run:
-            print(f"  [DRY-RUN] Would create: {link.relative_to(DOCUMENTS_DIR)}")
-            print(f"            -> {target.relative_to(RAW_DIR)}")
-            stats.symlinks_created += 1
-            continue
+    return prefix, suffix, suffix_folder
 
-        # Create symlink (allow broken - files not downloaded yet)
-        create_symlink_safe(target, link, allow_broken=True, stats=stats)
 
-    return symlink_map
+def build_grouped_files_toc(
+    qualifying: dict[str, tuple["Medicine", list[Document]]],
+    output_dir: Path,
+    dry_run: bool = False,
+) -> tuple[dict, int]:
+    """Build three-level grouped files TOC structure.
+
+    Creates:
+    - files/toc.json with $ref entries to each prefix group
+    - files/{prefix}/toc.json with $ref entries to each product
+    - files/{prefix}/{suffix}/toc.json with actual document entries
+
+    Args:
+        qualifying: dict mapping product_number to (medicine, documents) tuple
+        output_dir: Path to the accession directory
+        dry_run: If True, don't write files
+
+    Returns:
+        Tuple of (top-level files TOC entry, total document count)
+    """
+    files_dir = output_dir / "files"
+
+    # Group products by prefix
+    prefix_groups: dict[str, list[tuple[str, str, dict]]] = defaultdict(list)
+    total_docs = 0
+
+    for i, (product_num, (med, docs)) in enumerate(qualifying.items(), 1):
+        if i % 100 == 0:
+            print(f"  Processing {i}/{len(qualifying)}...")
+
+        prefix, suffix, suffix_toc = build_files_toc_entry(product_num, docs)
+        prefix_groups[prefix].append((suffix, suffix_toc, docs, med.name))
+
+        # Count documents
+        for doc in docs:
+            if doc.url:
+                total_docs += 1
+
+    print(f"  Created {len(prefix_groups)} prefix groups")
+
+    # Create directory structure and write toc.json files
+    prefix_ref_entries = []
+
+    for prefix in sorted(prefix_groups.keys()):
+        products = prefix_groups[prefix]
+        prefix_path = f"documents/{EMA_ACCESSION}/files/{prefix}"
+
+        # Create prefix directory
+        prefix_dir = files_dir / prefix
+        if not dry_run:
+            prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build suffix-level entries with $ref markers for prefix toc.json
+        suffix_ref_entries = []
+
+        for suffix, suffix_toc, docs, med_name in sorted(products, key=lambda x: x[0]):
+            suffix_path = f"{prefix_path}/{suffix}"
+
+            # Create suffix directory
+            suffix_dir = prefix_dir / suffix
+            if not dry_run:
+                suffix_dir.mkdir(parents=True, exist_ok=True)
+
+                # Write product toc.json (actual document entries)
+                product_toc_path = suffix_dir / "toc.json"
+                with open(product_toc_path, "w") as f:
+                    json.dump(suffix_toc, f, indent=2)
+
+                # Add $ref entry for this product in prefix toc.json
+            # Display title: EMEA/H/C/000292 (prefix digits + suffix)
+            prefix_digits = prefix.replace("EMEA-H-C-", "")  # "000"
+            full_number = prefix_digits + suffix  # "000292"
+            suffix_ref_entry = {
+                "name": suffix,
+                "type": "folder",
+                "path": suffix_path,
+                "title": f"EMEA/H/C/{full_number} - {med_name}",
+                "$ref": f"{suffix_path}/toc.json",
+            }
+            suffix_ref_entries.append(suffix_ref_entry)
+
+        # Write prefix toc.json (with $ref to products)
+        # Display title: EMEA/H/C/000XXX
+        prefix_digits = prefix.replace("EMEA-H-C-", "")  # "000"
+        prefix_title = f"EMEA/H/C/{prefix_digits}XXX"
+        prefix_toc = {
+            "name": prefix,
+            "type": "folder",
+            "path": prefix_path,
+            "title": prefix_title,
+            "children": suffix_ref_entries,
+        }
+
+        if not dry_run:
+            prefix_toc_path = prefix_dir / "toc.json"
+            with open(prefix_toc_path, "w") as f:
+                json.dump(prefix_toc, f, indent=2)
+
+        # Add $ref entry for this prefix in top-level files toc.json
+        prefix_ref_entry = {
+            "name": prefix,
+            "type": "folder",
+            "path": prefix_path,
+            "title": prefix_title,
+            "$ref": f"{prefix_path}/toc.json",
+        }
+        prefix_ref_entries.append(prefix_ref_entry)
+
+    # Build top-level files toc.json
+    files_toc = {
+        "name": "files",
+        "type": "folder",
+        "path": f"documents/{EMA_ACCESSION}/files",
+        "title": "All Files",
+        "children": prefix_ref_entries,
+        "_source": "ema-build",
+    }
+
+    if not dry_run:
+        files_toc_path = files_dir / "toc.json"
+        with open(files_toc_path, "w") as f:
+            json.dump(files_toc, f, indent=2)
+        print(f"  Written: {files_toc_path.relative_to(output_dir.parent)}")
+
+    return files_toc, total_docs
 
 
 def extract_common_name(names: list[str]) -> str | None:
@@ -509,7 +739,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                         for med, docs in prods:
                             escaped = escape_product_number(med.product_number)
                             atc = normalize_atc(med.atc_code or "")
-                            display_name = f"{atc}) {med.name} - {escaped}"
+                            display_name = f"{atc}) {med.name} - {med.product_number}"
                             fs_name = f"{atc}) {escape_for_path(med.name)} - {escaped}"
                             result[fs_name] = ("leaf", med, docs, display_name)
                 else:
@@ -529,7 +759,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                         # Leaf node: key is product folder name
                         escaped = escape_product_number(med.product_number)
                         atc = normalize_atc(med.atc_code or "")
-                        display_name = f"{atc}) {med.name} - {escaped}"
+                        display_name = f"{atc}) {med.name} - {med.product_number}"
                         fs_name = f"{atc}) {escape_for_path(med.name)} - {escaped}"
                         result[fs_name] = ("leaf", med, docs, display_name)
 
@@ -563,7 +793,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                         for med, docs in prods:
                             escaped = escape_product_number(med.product_number)
                             # Simpler leaf name since ATC is in parent folder
-                            display_leaf = f"{med.name} - {escaped}"
+                            display_leaf = f"{med.name} - {med.product_number}"
                             fs_leaf = f"{escape_for_path(med.name)} - {escaped}"
                             children[fs_leaf] = ("leaf", med, docs, display_leaf)
                         result[fs_folder] = ("dir", children, display_folder)
@@ -572,7 +802,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                         for med, docs in prods:
                             escaped = escape_product_number(med.product_number)
                             atc = normalize_atc(med.atc_code or "")
-                            display_name = f"{atc}) {med.name} - {escaped}"
+                            display_name = f"{atc}) {med.name} - {med.product_number}"
                             fs_name = f"{atc}) {escape_for_path(med.name)} - {escaped}"
                             result[fs_name] = ("leaf", med, docs, display_name)
                 else:
@@ -613,7 +843,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                             children = {}
                             for med, docs in prods:
                                 escaped = escape_product_number(med.product_number)
-                                display_leaf = f"{med.name} - {escaped}"
+                                display_leaf = f"{med.name} - {med.product_number}"
                                 fs_leaf = f"{escape_for_path(med.name)} - {escaped}"
                                 children[fs_leaf] = ("leaf", med, docs, display_leaf)
                             result[fs_folder] = ("dir", children, display_folder)
@@ -622,7 +852,7 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
                             for med, docs in prods:
                                 escaped = escape_product_number(med.product_number)
                                 atc = normalize_atc(med.atc_code or "")
-                                display_name = f"{atc}) {med.name} - {escaped}"
+                                display_name = f"{atc}) {med.name} - {med.product_number}"
                                 fs_name = f"{atc}) {escape_for_path(med.name)} - {escaped}"
                                 result[fs_name] = ("leaf", med, docs, display_name)
                     continue
@@ -647,80 +877,238 @@ def build_atc_trie(products: dict[str, tuple[Medicine, list[Document]]]) -> dict
     return build_level(by_atc, 0)
 
 
-def create_atc_view(
+def build_atc_toc(
     products: dict[str, tuple[Medicine, list[Document]]],
-    all_files_symlinks: dict[str, dict[str, Path]],
-    stats: ViewStatistics,
-    dry_run: bool = False
-):
-    """Create the By-ATC view with collapsed single-child nodes."""
+) -> dict:
+    """Build TOC structure for By-ATC view.
 
+    Returns TOC folder entry for By-ATC/.
+    """
     # Build the trie
     trie = build_atc_trie(products)
 
-    def write_display_metadata(dir_path: Path, display_name: str, fs_name: str):
-        """Write __metadata.json if display name differs from filesystem name."""
-        if display_name != fs_name:
-            metadata_path = dir_path / "__metadata.json"
-            metadata = {"_folder": {"title": display_name}}
-            dir_path.mkdir(parents=True, exist_ok=True)
-            with open(metadata_path, "w") as f:
-                json.dump(metadata, f, indent=2)
+    def trie_to_toc(node: dict, path_prefix: str) -> list:
+        """Recursively convert trie to TOC entries."""
+        entries = []
 
-    def create_from_trie(node: dict, base_path: Path):
-        """Recursively create directories and symlinks from trie."""
         for fs_name, value in sorted(node.items()):
+            entry_path = f"{path_prefix}/{fs_name}"
+
             if value[0] == "leaf":
-                # Leaf node - create product directory with symlinks
+                # Leaf node - product with documents
                 # value = ("leaf", med, docs, display_name)
                 _, med, docs, display_name = value
-                product_dir = base_path / fs_name
-                files_symlinks = all_files_symlinks.get(med.product_number, {})
 
-                # Write metadata if display name differs
-                if not dry_run:
-                    write_display_metadata(product_dir, display_name, fs_name)
-
+                # Build document entries
+                doc_entries = []
                 for doc in docs:
-                    if not doc.url or doc.url not in files_symlinks:
+                    if not doc.url:
                         continue
+                    doc_entries.append(make_doc_toc_entry(doc, entry_path))
 
-                    target = files_symlinks[doc.url]
-                    link = product_dir / target.name
+                # Sort by date
+                doc_entries = sort_docs_with_par_first(doc_entries)
 
-                    if dry_run:
-                        print(f"  [DRY-RUN] ATC: {link.relative_to(DOCUMENTS_DIR)}")
-                        stats.symlinks_created += 1
-                        continue
-
-                    create_symlink_safe(target, link, allow_broken=True, stats=stats)
+                entry = make_folder_toc_entry(fs_name, entry_path, doc_entries, display_name)
+                entries.append(entry)
 
             elif value[0] == "dir":
                 # Directory node - recurse
                 # value = ("dir", children, display_name)
                 _, children, display_name = value
-                subdir = base_path / fs_name
 
-                # Write metadata if display name differs
+                child_entries = trie_to_toc(children, entry_path)
+                entry = make_folder_toc_entry(fs_name, entry_path, child_entries, display_name)
+                entries.append(entry)
+
+        return entries
+
+    base_path = f"documents/{EMA_ACCESSION}/By-ATC"
+    children = trie_to_toc(trie, base_path)
+
+    return make_folder_toc_entry("By-ATC", base_path, children)
+
+
+def build_grouped_atc_toc(
+    products: dict[str, tuple["Medicine", list[Document]]],
+    output_dir: Path,
+    dry_run: bool = False,
+) -> dict:
+    """Build grouped By-ATC TOC structure with toc.json at levels 0, 2, and 4.
+
+    Creates:
+    - By-ATC/toc.json with level 1 inline, $ref to level 2
+    - By-ATC/{L1}/{L2}/toc.json with level 3 inline, $ref to level 4
+    - By-ATC/{L1}/{L2}/{L3}/{L4}/toc.json with full content
+
+    Args:
+        products: dict mapping product_number to (medicine, documents) tuple
+        output_dir: Path to the accession directory
+        dry_run: If True, don't write files
+
+    Returns:
+        Top-level By-ATC TOC entry
+    """
+    trie = build_atc_trie(products)
+
+    def trie_to_toc(node: dict, path_prefix: str) -> list:
+        """Recursively convert trie to TOC entries (full inline content)."""
+        entries = []
+        for fs_name, value in sorted(node.items()):
+            entry_path = f"{path_prefix}/{fs_name}"
+
+            if value[0] == "leaf":
+                _, med, docs, display_name = value
+                doc_entries = [make_doc_toc_entry(doc, entry_path)
+                               for doc in docs if doc.url]
+                doc_entries = sort_docs_with_par_first(doc_entries)
+                entries.append(make_folder_toc_entry(fs_name, entry_path, doc_entries, display_name))
+
+            elif value[0] == "dir":
+                _, children, display_name = value
+                child_entries = trie_to_toc(children, entry_path)
+                entries.append(make_folder_toc_entry(fs_name, entry_path, child_entries, display_name))
+
+        return entries
+
+    def make_ref_entry(fs_name: str, path: str, display_name: str = None) -> dict:
+        """Create a $ref entry pointing to a toc.json file."""
+        entry = {
+            "name": fs_name,
+            "type": "folder",
+            "path": path,
+            "$ref": f"{path}/toc.json",
+        }
+        if display_name and display_name != fs_name:
+            entry["title"] = display_name
+        return entry
+
+    def make_leaf_entry(fs_name: str, path: str, med, docs, display_name: str) -> dict:
+        """Create inline entry for a leaf (product with documents)."""
+        doc_entries = [make_doc_toc_entry(doc, path) for doc in docs if doc.url]
+        doc_entries = sort_docs_with_par_first(doc_entries)
+        return make_folder_toc_entry(fs_name, path, doc_entries, display_name)
+
+    atc_dir = output_dir / "By-ATC"
+    base_path = f"documents/{EMA_ACCESSION}/By-ATC"
+
+    # Build level 0 (By-ATC) with level 1 inline
+    level1_entries = []
+
+    for l1_name, l1_value in sorted(trie.items()):
+        if l1_value[0] != "dir":
+            continue
+
+        _, l1_children, l1_display = l1_value
+        l1_path = f"{base_path}/{l1_name}"
+        l1_dir = atc_dir / l1_name
+
+        # Build level 1 entry with level 2 as $ref
+        level2_entries = []
+
+        for l2_name, l2_value in sorted(l1_children.items()):
+            l2_path = f"{l1_path}/{l2_name}"
+            l2_dir = l1_dir / l2_name
+
+            if l2_value[0] == "leaf":
+                # Level 2 leaf - inline
+                _, med, docs, display_name = l2_value
+                level2_entries.append(make_leaf_entry(l2_name, l2_path, med, docs, display_name))
+
+            elif l2_value[0] == "dir":
+                # Level 2 dir - create toc.json, use $ref
+                _, l2_children, l2_display = l2_value
+
                 if not dry_run:
-                    write_display_metadata(subdir, display_name, fs_name)
+                    l2_dir.mkdir(parents=True, exist_ok=True)
 
-                create_from_trie(children, subdir)
+                # Build level 2 toc.json with level 3 inline
+                level3_entries = []
 
-    atc_base = EMA_ACCESSION_DIR / "By-ATC"
-    create_from_trie(trie, atc_base)
+                for l3_name, l3_value in sorted(l2_children.items()):
+                    l3_path = f"{l2_path}/{l3_name}"
+                    l3_dir = l2_dir / l3_name
+
+                    if l3_value[0] == "leaf":
+                        # Level 3 leaf - inline
+                        _, med, docs, display_name = l3_value
+                        level3_entries.append(make_leaf_entry(l3_name, l3_path, med, docs, display_name))
+
+                    elif l3_value[0] == "dir":
+                        # Level 3 dir - build level 4 entries
+                        _, l3_children, l3_display = l3_value
+
+                        level4_entries = []
+
+                        for l4_name, l4_value in sorted(l3_children.items()):
+                            l4_path = f"{l3_path}/{l4_name}"
+                            l4_dir = l3_dir / l4_name
+
+                            if l4_value[0] == "leaf":
+                                # Level 4 leaf - inline in level 3
+                                _, med, docs, display_name = l4_value
+                                level4_entries.append(make_leaf_entry(l4_name, l4_path, med, docs, display_name))
+
+                            elif l4_value[0] == "dir":
+                                # Level 4 dir - create toc.json, use $ref
+                                _, l4_children, l4_display = l4_value
+
+                                if not dry_run:
+                                    l4_dir.mkdir(parents=True, exist_ok=True)
+
+                                # Write level 4 toc.json with full content
+                                l4_child_entries = trie_to_toc(l4_children, l4_path)
+                                l4_toc = make_folder_toc_entry(l4_name, l4_path, l4_child_entries, l4_display)
+
+                                if not dry_run:
+                                    with open(l4_dir / "toc.json", "w") as f:
+                                        json.dump(l4_toc, f, indent=2)
+
+                                level4_entries.append(make_ref_entry(l4_name, l4_path, l4_display))
+
+                        # Level 3 entry with level 4 children (inline)
+                        l3_entry = make_folder_toc_entry(l3_name, l3_path, level4_entries, l3_display)
+                        level3_entries.append(l3_entry)
+
+                # Write level 2 toc.json
+                l2_toc = make_folder_toc_entry(l2_name, l2_path, level3_entries, l2_display)
+
+                if not dry_run:
+                    with open(l2_dir / "toc.json", "w") as f:
+                        json.dump(l2_toc, f, indent=2)
+
+                level2_entries.append(make_ref_entry(l2_name, l2_path, l2_display))
+
+        # Level 1 entry (inline in level 0)
+        l1_entry = make_folder_toc_entry(l1_name, l1_path, level2_entries, l1_display)
+        level1_entries.append(l1_entry)
+
+    # Build top-level By-ATC toc.json
+    atc_toc = {
+        "name": "By-ATC",
+        "type": "folder",
+        "path": base_path,
+        "children": level1_entries,
+        "_source": "ema-build",
+    }
+
+    if not dry_run:
+        atc_toc_path = atc_dir / "toc.json"
+        with open(atc_toc_path, "w") as f:
+            json.dump(atc_toc, f, indent=2)
+        print(f"  Written: {atc_toc_path.relative_to(output_dir.parent)}")
+
+    return atc_toc
 
 
 def create_metadata(
     products: dict[str, tuple[Medicine, list[Document]]],
-    stats: ViewStatistics
+    doc_entries: int
 ):
     """Create metadata.json for the accession."""
-    total_docs = sum(len(docs) for _, docs in products.values())
-
     metadata = {
         "accession": EMA_ACCESSION,
-        "title": "EMA Public Documents",
+        "title": "RDCP-E26-EMA - EMA PARs",
         "description": "Public assessment reports and other documents for human medicines authorized by the European Medicines Agency.",
         "drug": "Multiple (EMA database)",
         "source": "https://www.ema.europa.eu/en/medicines",
@@ -731,15 +1119,14 @@ def create_metadata(
         "created": datetime.now().isoformat(),
         "stats": {
             "products": len(products),
-            "documents": total_docs,
-            "symlinks_created": stats.symlinks_created,
+            "document_entries": doc_entries,
         }
     }
 
     metadata_path = EMA_ACCESSION_DIR / "metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
-    print(f"Created: {metadata_path.relative_to(DOCUMENTS_DIR)}")
+    print(f"  Written: {metadata_path.relative_to(DOCUMENTS_DIR)}")
 
 
 def build_ema(clean: bool = False, dry_run: bool = False):
@@ -787,30 +1174,26 @@ def build_ema(clean: bool = False, dry_run: bool = False):
     # Create directory structure
     if not dry_run:
         EMA_ACCESSION_DIR.mkdir(parents=True, exist_ok=True)
+        (EMA_ACCESSION_DIR / "files").mkdir(exist_ok=True)
+        (EMA_ACCESSION_DIR / "By-ATC").mkdir(exist_ok=True)
 
-    stats = ViewStatistics()
-
-    # First pass: create files/ symlinks for all products
-    print("Creating files/ symlinks...")
-    all_files_symlinks: dict[str, dict[str, Path]] = {}
-    for i, (product_num, (med, docs)) in enumerate(qualifying.items(), 1):
-        if i % 100 == 0:
-            print(f"  Processing {i}/{len(qualifying)}...")
-
-        files_symlinks = create_files_symlinks(product_num, docs, stats, dry_run)
-        all_files_symlinks[product_num] = files_symlinks
+    # Build files/ TOC structure with three-level grouping
+    print("Building files/ TOC with grouped structure...")
+    files_toc, total_doc_entries = build_grouped_files_toc(
+        qualifying, EMA_ACCESSION_DIR, dry_run
+    )
 
     print()
 
-    # Second pass: create By-ATC/ view with collapsed hierarchy
-    print("Creating By-ATC/ view...")
-    create_atc_view(qualifying, all_files_symlinks, stats, dry_run)
+    # Build By-ATC/ TOC structure with grouped toc.json files
+    print("Building By-ATC/ TOC with grouped structure...")
+    atc_toc = build_grouped_atc_toc(qualifying, EMA_ACCESSION_DIR, dry_run)
 
     print()
 
     # Create metadata
     if not dry_run:
-        create_metadata(qualifying, stats)
+        create_metadata(qualifying, total_doc_entries)
 
     # Print summary
     print()
@@ -818,15 +1201,7 @@ def build_ema(clean: bool = False, dry_run: bool = False):
     print("Summary")
     print("=" * 60)
     print(f"Products: {len(qualifying)}")
-    print(stats)
-
-    if stats.errors:
-        print()
-        print("Errors:")
-        for err in stats.errors[:10]:  # Show first 10
-            print(f"  {err}")
-        if len(stats.errors) > 10:
-            print(f"  ... and {len(stats.errors) - 10} more")
+    print(f"Document entries: {total_doc_entries}")
 
     return True
 
