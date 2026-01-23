@@ -6,9 +6,9 @@ Downloads files to paths matching their URL structure:
   -> documents/_raw/www.ema.europa.eu/en/documents/report/foo.json
 
 Usage:
-  python scripts/download_ema.py                    # Download JSON indexes + first 10 assessment reports
-  python scripts/download_ema.py --json-only        # Download only the JSON index files
-  python scripts/download_ema.py --reports N        # Download N assessment reports (default: 10)
+  python scripts/download_ema.py                    # Download JSON catalogs only
+  python scripts/download_ema.py --reports 10       # Also download 10 assessment reports
+  python scripts/download_ema.py --skip-json-catalog  # Skip JSON, just download reports
 """
 
 import argparse
@@ -199,22 +199,16 @@ def main():
         epilog=__doc__
     )
     parser.add_argument(
-        "--json-only", "--indexes-only",
-        action="store_true",
-        dest="json_only",
-        help="Only download JSON index files, skip assessment reports"
-    )
-    parser.add_argument(
         "--reports",
         type=int,
-        default=10,
+        default=0,
         metavar="N",
-        help="Number of assessment reports to download (default: 10)"
+        help="Number of assessment reports to download (default: 0)"
     )
     parser.add_argument(
-        "--skip-json",
+        "--skip-json-catalog",
         action="store_true",
-        help="Skip downloading JSON index files"
+        help="Skip downloading JSON catalog files"
     )
 
     args = parser.parse_args()
@@ -224,13 +218,13 @@ def main():
     print(f"Output directory: {RAW_DIR}")
     print()
 
-    # Download JSON indexes
-    if not args.skip_json:
+    # Download JSON catalogs
+    if not args.skip_json_catalog:
         json_results = download_json_indexes()
-        print(f"\nDownloaded {len(json_results)}/{len(EMA_JSON_FILES)} JSON files.")
+        print(f"\nDownloaded {len(json_results)}/{len(EMA_JSON_FILES)} JSON catalog files.")
 
     # Download assessment reports
-    if not args.json_only and args.reports > 0:
+    if args.reports > 0:
         print()
         count = download_assessment_reports(args.reports)
         print(f"\nDownloaded {count}/{args.reports} assessment reports.")

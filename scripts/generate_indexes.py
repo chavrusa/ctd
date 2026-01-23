@@ -165,7 +165,17 @@ def list_children(path):
     return folders, files
 
 
-def generate_index_md(folder_path, folders, files, metadata, inherited):
+def format_size(size_bytes):
+    """Format byte size as human-readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes} bytes"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def generate_index_md(folder_path, folders, files, metadata, inherited, full_md_size=0):
     """Generate index.md content."""
     lines = []
 
@@ -187,8 +197,14 @@ def generate_index_md(folder_path, folders, files, metadata, inherited):
     if files:
         parts.append(f"{len(files)} file{'s' if len(files) != 1 else ''}")
     if parts:
-        lines.append(", ".join(parts) + f" | [Full tree](index-full.md)")
+        lines.append(", ".join(parts))
         lines.append("")
+
+    # Alternative formats
+    lines.append(f"A JSON version is available at [index.json]({folder_url}/index.json).")
+    if full_md_size > 0:
+        lines.append(f"A full recursive listing is available at [index-full.md]({folder_url}/index-full.md) ({format_size(full_md_size)}).")
+    lines.append("")
 
     # Inherited metadata
     if inherited.get("drug") or inherited.get("accession"):
@@ -214,7 +230,7 @@ def generate_index_md(folder_path, folders, files, metadata, inherited):
                 fs_path = fs_name
             encoded = url_encode_path(fs_path)
             count_str = f"({folder['item_count']} item{'s' if folder['item_count'] != 1 else ''})"
-            lines.append(f"- [{display}/]({encoded}/index.md) {count_str}")
+            lines.append(f"- [{display}/]({folder_url}/{encoded}/index.md) {count_str}")
         lines.append("")
 
     # Files section
@@ -244,8 +260,8 @@ def generate_index_json(folder_path, folders, files, metadata, inherited):
         child = {
             "name": folder["name"],
             "type": "folder",
-            "path": folder_rel,
-            "url": f"{BASE_URL}/{url_encode_path(folder_rel)}",
+            "path": f"{folder_rel}/",
+            "index": f"{BASE_URL}/{url_encode_path(folder_rel)}/index.json",
             "itemCount": folder["item_count"],
         }
         # Add title if display name differs from filesystem name
@@ -265,7 +281,7 @@ def generate_index_json(folder_path, folders, files, metadata, inherited):
         })
 
     result = {
-        "path": str(rel_path),
+        "path": f"{rel_path}/",
         "url": folder_url,
         "name": folder_path.name,
         "fullIndex": "index-full.json",
@@ -337,8 +353,8 @@ def scan_tree(path, inherited=None):
     return {
         "name": path.name,
         "type": "folder",
-        "path": str(rel_path),
-        "url": f"{BASE_URL}/{url_encode_path(str(rel_path))}",
+        "path": f"{rel_path}/",
+        "index": f"{BASE_URL}/{url_encode_path(str(rel_path))}/index.json",
         "summaryIndex": "index.json",
         "children": children,
     }
@@ -353,7 +369,7 @@ def generate_full_md(tree, depth=0, is_root=False):
         if depth == 0:
             lines.append(f"# {tree['name']} (Full Tree)")
             lines.append("")
-            lines.append(f"URL: {tree['url']}")
+            lines.append(f"Index: {tree['index'].replace('index.json', 'index.md')}")
             lines.append("")
             lines.append(f"[Summary view](index.md)")
             lines.append("")
@@ -397,20 +413,22 @@ def process_folder(path, inherited=None, is_root=False):
     if not folders and not files:
         return
 
-    # Generate index.md
-    index_md = generate_index_md(path, folders, files, metadata, current_inherited)
+    # Generate index-full.md and index-full.json first (to get sizes)
+    tree = scan_tree(path, inherited)
+    full_md_size = 0
+    if tree:
+        full_md_content = "\n".join(generate_full_md(tree, 0))
+        full_md_size = len(full_md_content.encode('utf-8'))
+        (path / "index-full.md").write_text(full_md_content)
+        (path / "index-full.json").write_text(json.dumps(tree, indent=2))
+
+    # Generate index.md (with size info)
+    index_md = generate_index_md(path, folders, files, metadata, current_inherited, full_md_size)
     (path / "index.md").write_text(index_md)
 
     # Generate index.json
     index_json = generate_index_json(path, folders, files, metadata, current_inherited)
     (path / "index.json").write_text(json.dumps(index_json, indent=2))
-
-    # Generate index-full.md and index-full.json
-    tree = scan_tree(path, inherited)
-    if tree:
-        full_md_lines = generate_full_md(tree, 0)
-        (path / "index-full.md").write_text("\n".join(full_md_lines))
-        (path / "index-full.json").write_text(json.dumps(tree, indent=2))
 
     # Recurse into subfolders (use final_path for collapsed chains)
     for folder in folders:
@@ -429,6 +447,102 @@ def clean_indexes(path):
             except OSError:
                 pass
     return removed
+
+
+def generate_static_documents_index():
+    """Generate index files for web/static/documents/ with only exposed directories."""
+    static_docs = PROJECT_DIR / "web" / "static" / "documents"
+    if not static_docs.exists():
+        return
+
+    # Find all symlinked directories
+    folders = []
+    for entry in sorted(os.scandir(static_docs), key=lambda e: e.name.lower()):
+        if entry.name.startswith('.') or entry.name in SKIP_FILES:
+            continue
+        if entry.is_dir(follow_symlinks=True):
+            # Load metadata from the target
+            target_path = Path(entry.path).resolve()
+            metadata = load_metadata(target_path)
+            title = metadata.get("title") or metadata.get("_folder", {}).get("title")
+            item_count = count_items_recursive(entry.path)
+            folders.append({
+                "name": entry.name,
+                "display_name": title or entry.name,
+                "item_count": item_count,
+            })
+
+    if not folders:
+        return
+
+    # Generate index.json
+    children = []
+    for folder in folders:
+        children.append({
+            "name": folder["name"],
+            "type": "folder",
+            "path": f"documents/{folder['name']}/",
+            "index": f"{BASE_URL}/documents/{folder['name']}/index.json",
+            "itemCount": folder["item_count"],
+            "title": folder["display_name"] if folder["display_name"] != folder["name"] else None,
+        })
+    # Remove None titles
+    for child in children:
+        if child.get("title") is None:
+            del child["title"]
+
+    index_json = {
+        "path": "documents/",
+        "url": f"{BASE_URL}/documents",
+        "name": "documents",
+        "children": children,
+    }
+    (static_docs / "index.json").write_text(json.dumps(index_json, indent=2))
+
+    # Generate index.md
+    lines = [
+        "# Documents",
+        "",
+        f"URL: {BASE_URL}/documents",
+        "",
+        f"{len(folders)} folder{'s' if len(folders) != 1 else ''}",
+        "",
+        "## Folders",
+        "",
+    ]
+    for folder in folders:
+        display = folder["display_name"]
+        encoded = urllib.parse.quote(folder["name"], safe='')
+        count_str = f"({folder['item_count']} item{'s' if folder['item_count'] != 1 else ''})"
+        lines.append(f"- [{display}/]({BASE_URL}/documents/{encoded}/index.md) {count_str}")
+    lines.append("")
+
+    (static_docs / "index.md").write_text("\n".join(lines))
+
+    # Also generate top-level web/static/index.md
+    static_root = PROJECT_DIR / "web" / "static"
+    top_lines = [
+        "# CTD Document Archive",
+        "",
+        "This archive contains regulatory documents organized in Common Technical Document (CTD) format, including clinical trial data, regulatory submissions, and European Medicines Agency (EMA) Public Assessment Reports.",
+        "",
+        "URL: https://archive.icosian.net",
+        "",
+        "## Documents",
+        "",
+        f"{len(folders)} accession{'s' if len(folders) != 1 else ''} available:",
+        "",
+    ]
+    for folder in folders:
+        display = folder["display_name"]
+        encoded = urllib.parse.quote(folder["name"], safe='')
+        count_str = f"({folder['item_count']} item{'s' if folder['item_count'] != 1 else ''})"
+        top_lines.append(f"- [{display}/]({BASE_URL}/documents/{encoded}/index.md) {count_str}")
+    top_lines.append("")
+    top_lines.append("Each accession contains documents organized hierarchically. Use the index.md files for navigation.")
+    top_lines.append("")
+
+    (static_root / "index.md").write_text("\n".join(top_lines))
 
 
 def main():
@@ -463,6 +577,10 @@ def main():
     print("Processing documents/ root...")
     process_folder(DOCS_DIR, {}, is_root=True)
     total_indexes += 1
+
+    # Generate index for web/static/documents/ (only exposed directories)
+    print("Processing web/static/documents/...")
+    generate_static_documents_index()
 
     print(f"\nTotal: {total_indexes} index sets generated")
 

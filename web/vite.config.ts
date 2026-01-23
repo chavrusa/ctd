@@ -7,6 +7,14 @@ export default defineConfig({
 		headers: {
 			// Prevent caching of toc.json during development
 			'Cache-Control': 'no-store'
+		},
+		fs: {
+			// Allow serving files outside of root
+			strict: false
+		},
+		watch: {
+			// Don't follow symlinks when watching
+			followSymlinks: false
 		}
 	}
 });

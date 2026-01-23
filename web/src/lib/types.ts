@@ -5,6 +5,8 @@ export interface TocEntry {
 	children?: TocEntry[];
 	// Lazy loading: URL to child toc.json for this folder
 	$ref?: string;
+	// External URL: for entries that link to external resources (e.g., EMA documents)
+	url?: string;
 	// Metadata fields (from metadata.json)
 	title?: string;
 	summary?: string;

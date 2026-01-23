@@ -187,16 +187,15 @@ def make_doc_toc_entry(doc: Document, path_prefix: str) -> dict:
 
     Args:
         doc: The Document object
-        path_prefix: Path prefix like "documents/RDCP-E26-EMA/files/EMEA-H-C-000292/EMA"
+        path_prefix: Path prefix (unused, kept for API compatibility)
 
     Returns:
-        dict with name, type, path, url, and other metadata
+        dict with name, type, url, and other metadata (no path for external docs)
     """
     filename = doc.get_filename()
     return {
         "name": filename,
         "type": "pdf",
-        "path": f"{path_prefix}/{filename}",
         "url": doc.url,
         "date": doc.get_date(),
         "title": doc.get_title(),

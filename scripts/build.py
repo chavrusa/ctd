@@ -97,6 +97,11 @@ def build_indexes():
     return run_script("generate_indexes.py")
 
 
+def build_ema_download():
+    """Download EMA JSON catalog files."""
+    return run_script("download_ema.py")
+
+
 def build_ema(clean=False):
     """Build EMA accession structure."""
     args = []
@@ -198,7 +203,8 @@ def main():
     if not args.no_views:
         steps.append(("Views", lambda: build_views(args.clean)))
     if not args.no_ema:
-        steps.append(("EMA", lambda: build_ema(args.clean)))
+        steps.append(("EMA Download", build_ema_download))
+        steps.append(("EMA Build", lambda: build_ema(args.clean)))
     if not args.no_toc:
         steps.append(("TOC", build_toc))
         steps.append(("Indexes", build_indexes))
