@@ -1,0 +1,39 @@
+{
+  "path": "documents/",
+  "url": "https://archive.icosian.net/documents",
+  "name": "documents",
+  "children": [
+    {
+      "name": "RDCP-A26-0001",
+      "type": "folder",
+      "path": "documents/RDCP-A26-0001/",
+      "index": "https://archive.icosian.net/documents/RDCP-A26-0001/index.json",
+      "itemCount": 1824,
+      "title": "RDCP-A26-0001 - ALLN-177 Reloxaliase"
+    },
+    {
+      "name": "RDCP-A26-0002",
+      "type": "folder",
+      "path": "documents/RDCP-A26-0002/",
+      "index": "https://archive.icosian.net/documents/RDCP-A26-0002/index.json",
+      "itemCount": 1771,
+      "title": "RDCP-A26-0002 - ALLN-346 Urate Oxidase"
+    },
+    {
+      "name": "RDCP-A26-0003",
+      "type": "folder",
+      "path": "documents/RDCP-A26-0003/",
+      "index": "https://archive.icosian.net/documents/RDCP-A26-0003/index.json",
+      "itemCount": 367,
+      "title": "RDCP-A26-0003 - Divalent siRNA"
+    },
+    {
+      "name": "RDCP-E26-EMA",
+      "type": "folder",
+      "path": "documents/RDCP-E26-EMA/",
+      "index": "https://archive.icosian.net/documents/RDCP-E26-EMA/index.json",
+      "itemCount": 1348,
+      "title": "RDCP-E26-EMA - EMA PARs"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "CTD Document Archive",
+  "description": "A collection of regulatory documents spanning drug development and approval processes: Common Technical Document submissions, FDA correspondence and review materials, clinical trial protocols and study reports, European Medicines Agency Public Assessment Reports, nonclinical and manufacturing data, and related regulatory filings.",
+  "url": "https://archive.icosian.net",
+  "accessions": [
+    {
+      "id": "RDCP-A26-0001",
+      "name": "RDCP-A26-0001 - ALLN-177 Reloxaliase",
+      "items": 1824,
+      "index_md": "https://archive.icosian.net/documents/RDCP-A26-0001/index.md",
+      "index_json": "https://archive.icosian.net/documents/RDCP-A26-0001/index.json"
+    },
+    {
+      "id": "RDCP-A26-0002",
+      "name": "RDCP-A26-0002 - ALLN-346 Urate Oxidase",
+      "items": 1771,
+      "index_md": "https://archive.icosian.net/documents/RDCP-A26-0002/index.md",
+      "index_json": "https://archive.icosian.net/documents/RDCP-A26-0002/index.json"
+    },
+    {
+      "id": "RDCP-A26-0003",
+      "name": "RDCP-A26-0003 - Divalent siRNA",
+      "items": 367,
+      "index_md": "https://archive.icosian.net/documents/RDCP-A26-0003/index.md",
+      "index_json": "https://archive.icosian.net/documents/RDCP-A26-0003/index.json"
+    },
+    {
+      "id": "RDCP-E26-EMA",
+      "name": "RDCP-E26-EMA - EMA PARs",
+      "items": 1348,
+      "index_md": "https://archive.icosian.net/documents/RDCP-E26-EMA/index.md",
+      "index_json": "https://archive.icosian.net/documents/RDCP-E26-EMA/index.json"
+    }
+  ]
+}

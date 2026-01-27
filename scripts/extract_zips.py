@@ -11,7 +11,7 @@ import zipfile
 import shutil
 from pathlib import Path
 
-DOCS_DIR = Path(__file__).parent / "documents"
+DOCS_DIR = Path(__file__).resolve().parent.parent / "documents"
 
 # File extensions considered "data" (go into Data subfolder)
 DATA_EXTENSIONS = {'.xpt', '.sas7bdat'}

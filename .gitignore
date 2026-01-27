@@ -1,5 +1,6 @@
 # Document data (large files, not for git)
-/documents/
+/documents/*
+!/documents/.gitignore
 
 # Data files
 *.sas7bdat
@@ -21,5 +22,7 @@ web/.svelte-kit/
 Thumbs.db
 
 # Generated (can be regenerated from documents/)
-toc.json
+/toc.json
+/toc.md
 __pycache__/
+

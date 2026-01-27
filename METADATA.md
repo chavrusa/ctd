@@ -4,133 +4,264 @@ This document defines the metadata format used throughout the CTD Document Archi
 
 ## Overview
 
-Each directory in `documents/` can contain a `metadata.json` file that provides human-readable titles, descriptions, and tags for files and folders.
+The archive uses a hierarchical metadata system:
+1. **Accession-level** metadata (`documents/RDCP-26-XXXX/metadata.json`)
+2. **Folder-level** metadata (`documents/RDCP-26-XXXX/files/.../metadata.json`)
+3. **File-level** metadata (entries within folder metadata.json files)
 
-## File Location
+## Directory Structure
 
 ```
 documents/
-├── ALLN-346/
-│   ├── metadata.json              # drug-level metadata
-│   └── Preclinical Development/
-│       ├── metadata.json          # section-level metadata
-│       └── Nonclinical Pharmacology/
-│           ├── metadata.json      # folder-level metadata
-│           ├── 185507.pdf
-│           └── ...
+├── RDCP-26-0001/                    # Accession folder
+│   ├── metadata.json                # Accession-level metadata
+│   └── files/
+│       ├── Clinical-Studies/
+│       │   ├── metadata.json        # Folder metadata
+│       │   └── 204/
+│       │       ├── metadata.json    # Folder + file metadata
+│       │       └── CSR.pdf
+│       └── ...
+├── RDCP-26-0002/
+│   ├── metadata.json
+│   └── files/
+│       └── ...
+└── Supporting/                       # Non-accession content
+    └── ...
 ```
 
-## Schema
+## Accession Numbers
+
+Format: `RDCP-YY-NNNN`
+- **RDCP** = Regulatory Data Commons Project
+- **YY** = Year (e.g., 26 = 2026)
+- **NNNN** = Sequential number within year
+
+Current assignments:
+| Accession | Drug | Description |
+|-----------|------|-------------|
+| RDCP-26-0001 | ALLN-177 (Reloxaliase) | Oral enzyme for enteric hyperoxaluria |
+| RDCP-26-0002 | ALLN-346 | Engineered uricase for hyperuricemia/gout |
+| RDCP-26-0003 | Divalent siRNA | Gene therapy for prion disease |
+
+---
+
+## Accession-Level Metadata
+
+Located at `documents/RDCP-26-XXXX/metadata.json`:
 
 ```json
 {
-  "_folder": {
-    "title": "string",
-    "summary": "string",
-    "drug": "string",
-    "drugName": "string"
+  "accession": "RDCP-26-0001",
+  "title": "ALLN-177 (Reloxaliase) Clinical Development Package",
+  "drug": "ALLN-177",
+  "drugName": "Reloxaliase",
+  "description": "Oral enzyme therapeutic for enteric hyperoxaluria...",
+  "license": {
+    "spdx": "LicenseRef-FDA-Public",
+    "name": "FDA Public Disclosure",
+    "url": "https://www.fda.gov/...",
+    "attribution": "Source: FDA public records via Allena Pharmaceuticals"
   },
-  "filename.pdf": {
-    "title": "string",
-    "summary": "string",
-    "tags": ["string"]
+  "source": {
+    "name": "Allena Pharmaceuticals",
+    "url": "https://drive.google.com/drive/folders/..."
+  },
+  "dateRange": {
+    "earliest": "2018-01-15",
+    "latest": "2024-03-20"
   }
 }
 ```
 
-## Fields
+### Fields
 
-### Folder metadata (`_folder`)
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `accession` | string | Yes | Accession number (e.g., `RDCP-26-0001`) |
+| `title` | string | Yes | Human-readable title for the collection |
+| `drug` | string | Yes | Drug identifier (inherited by all files) |
+| `drugName` | string | No | Brand/generic name |
+| `description` | string | No | Multi-sentence description of the collection |
+| `license` | object | Yes | Licensing information (see below) |
+| `source` | object | No | Data source information |
+| `dateRange` | object | No | Date range of documents in collection |
+
+### License Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `spdx` | string | Yes | SPDX identifier or `LicenseRef-*` for custom |
+| `name` | string | Yes | Human-readable license name |
+| `url` | string | No | Link to full license text |
+| `attribution` | string | No | Required attribution text |
+
+Common license values:
+- `CC-BY-4.0` - Creative Commons Attribution 4.0
+- `LicenseRef-FDA-Public` - FDA public disclosure records
+
+---
+
+## Folder-Level Metadata
+
+Located in `metadata.json` within any folder under `files/`:
+
+```json
+{
+  "_folder": {
+    "title": "Clinical Studies",
+    "summary": "Phase 1-3 clinical trial documentation"
+  }
+}
+```
+
+### Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `title` | string | No | Display name for the folder |
 | `summary` | string | No | One-sentence description |
-| `drug` | string | No | Drug identifier (e.g., `ALLN-346`). Inherited by children. |
-| `drugName` | string | No | Human-readable drug name (e.g., `Uricase variant`) |
+| `drug` | string | No | Override inherited drug (rare) |
+| `source` | object | No | Where this folder's content came from |
 
-### File metadata (`"filename.ext"`)
+### Source Object
+
+For folders created by the download scripts:
+
+```json
+{
+  "_folder": {
+    "title": "IND Application",
+    "summary": "FDA Investigational New Drug application...",
+    "source": {
+      "type": "google-drive",
+      "url": "https://drive.google.com/drive/folders/..."
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Source type: `google-drive`, `github`, or other |
+| `url` | string | Original URL where content was downloaded from |
+
+### Downloaded Folder Metadata (`__metadata.json`)
+
+For folders containing downloaded source files, use `__metadata.json` (double underscore prefix) instead of `metadata.json`. This prevents conflicts with any `metadata.json` files that may exist in the source data itself.
+
+The `generate_toc.py` script reads both `metadata.json` and `__metadata.json`, merging their contents (with `metadata.json` taking precedence if both exist).
+
+---
+
+## File-Level Metadata
+
+Included in the same `metadata.json` as folder metadata, keyed by filename:
+
+```json
+{
+  "_folder": {
+    "title": "Study 204"
+  },
+  "CSR.pdf": {
+    "title": "Clinical Study Report",
+    "summary": "Phase 2 efficacy and safety results",
+    "date": "2023-06-15",
+    "tags": ["csr", "phase-2", "efficacy"],
+    "ctdModule": "5.3.5.1",
+    "ctdTitle": "Reports of Controlled Clinical Studies"
+  },
+  "Protocol.pdf": {
+    "title": "Study Protocol v3.0",
+    "date": "unknown",
+    "tags": ["protocol"],
+    "ctdModule": "5.3.5.1"
+  }
+}
+```
+
+### Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `title` | string | No | Display name (instead of filename) |
-| `summary` | string | No | One-sentence description for sidebar |
-| `tags` | array | No | Labels for filtering (e.g., `["csr", "phase-1"]`) |
+| `summary` | string | No | One-sentence description |
+| `date` | string | No | Document date as `YYYY-MM-DD` or `"unknown"` |
+| `tags` | array | No | Labels for filtering and categorization |
+| `ctdModule` | string | No | CTD module number (e.g., `5.3.5.1`) |
+| `ctdTitle` | string | No | CTD module title |
+
+---
+
+## Standard Tag Vocabulary
+
+Use consistent tags for filtering and organization:
+
+### Document Types
+- `csr` - Clinical Study Report
+- `protocol` - Study protocol
+- `tlf` - Tables, Listings, Figures
+- `dataset` - Raw data files
+- `investigator-brochure` - IB document
+- `informed-consent` - ICF documents
+- `statistical-analysis-plan` - SAP
+
+### Development Phases
+- `preclinical` - Nonclinical studies
+- `phase-1` - Phase 1 clinical
+- `phase-2` - Phase 2 clinical
+- `phase-3` - Phase 3 clinical
+- `cmc` - Chemistry, Manufacturing, Controls
+
+### CTD Modules
+- `module-1` - Administrative
+- `module-2` - Summaries
+- `module-3` - Quality
+- `module-4` - Nonclinical
+- `module-5` - Clinical
+
+### Data Standards
+- `adam` - ADaM datasets
+- `sdtm` - SDTM datasets
+
+---
 
 ## Inheritance
 
-Properties defined in a parent folder's `_folder` are inherited by all descendants:
+Properties flow down the hierarchy:
 
+1. `drug` from accession-level is inherited by all files
+2. Folder `_folder` properties apply to that folder
+3. File-level metadata overrides inherited values
+
+Example:
 ```
-documents/ALLN-346/metadata.json
-{
-  "_folder": {
-    "drug": "ALLN-346",
-    "drugName": "Uricase variant"
-  }
-}
+RDCP-26-0001/metadata.json        → drug: "ALLN-177"
+RDCP-26-0001/files/Clinical-Studies/204/CSR.pdf
+                                  → inherits drug: "ALLN-177"
 ```
 
-All files under `documents/ALLN-346/` inherit `drug: "ALLN-346"` without needing to repeat it.
+---
 
 ## Fallbacks
 
-- If a file has no metadata entry, use the filename as the title
-- If a folder has no `_folder` entry, use the directory name as the title
-- If `drug` is not defined anywhere in the ancestor chain, leave it unset
+When metadata is missing:
+- **File title**: Use filename
+- **Folder title**: Use directory name
+- **Date**: Omit from display (not `"unknown"` unless explicitly set)
+- **Tags**: Empty array `[]`
+- **CTD module**: Omit (file not mapped to CTD structure)
 
-## Examples
-
-### Drug-level metadata
-```json
-// documents/ALLN-346/metadata.json
-{
-  "_folder": {
-    "title": "ALLN-346",
-    "summary": "Engineered uricase for hyperuricemia",
-    "drug": "ALLN-346",
-    "drugName": "Uricase variant"
-  }
-}
-```
-
-### Section-level metadata
-```json
-// documents/ALLN-346/Preclinical Development/metadata.json
-{
-  "_folder": {
-    "title": "Preclinical Development",
-    "summary": "Nonclinical studies supporting IND"
-  }
-}
-```
-
-### File-level metadata
-```json
-// documents/ALLN-346/Preclinical Development/Nonclinical Pharmacology/metadata.json
-{
-  "_folder": {
-    "title": "Nonclinical Pharmacology",
-    "summary": "In vitro and in vivo pharmacology studies"
-  },
-  "185507.pdf": {
-    "title": "Primary Pharmacodynamics Study Report",
-    "summary": "In vitro oxalate degradation assay results",
-    "tags": ["pharmacology", "in-vitro", "study-report"]
-  },
-  "2.6.1 Pharmacology Intro FINAL 19Dec2019.pdf": {
-    "title": "Pharmacology Introduction (CTD 2.6.1)",
-    "summary": "Overview of ALLN-346 pharmacology program",
-    "tags": ["ctd", "summary"]
-  }
-}
-```
+---
 
 ## Consumption
 
-Scripts (`generate_toc.py`) and the UI both read these files:
+The `generate_toc.py` script reads metadata to build:
+- `toc.json` - Tree structure for web UI navigation
+- `toc.md` - Markdown format for LLM consumption
 
-1. Walk the directory tree
-2. At each level, load `metadata.json` if present
-3. Merge inherited properties (e.g., `drug`) from ancestors
-4. Use metadata for display; fall back to filename/dirname if absent
+The web UI displays:
+- Titles and summaries in sidebar
+- Document dates in viewer header
+- License badges per accession
+- Tags for filtering (future)
